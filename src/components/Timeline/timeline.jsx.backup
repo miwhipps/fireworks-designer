@@ -1,0 +1,261 @@
+import React, { useState, useRef, useEffect } from "react";
+import { Play, Pause, Square, Plus } from "lucide-react";
+
+const FireworksTimeline = () => {
+  // Main timeline state
+  const [fireworks, setFireworks] = useState([]);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const totalDuration = 30; // 30 seconds default
+  const [draggedItem, setDraggedItem] = useState(null);
+
+  // Refs for animation and timeline
+  const animationRef = useRef();
+  const timelineRef = useRef();
+
+  // Firework types available in library
+  const fireworkTypes = [
+    { id: "burst", name: "Burst", color: "#ff4444", duration: 2 },
+    { id: "fountain", name: "Fountain", color: "#44ff44", duration: 4 },
+    { id: "spiral", name: "Spiral", color: "#4444ff", duration: 3 },
+    { id: "willow", name: "Willow", color: "#ffff44", duration: 3.5 },
+  ];
+
+  // Animation loop for playback
+  useEffect(() => {
+    if (isPlaying) {
+      const animate = () => {
+        setCurrentTime((prev) => {
+          const newTime = prev + 0.016; // ~60fps
+          if (newTime >= totalDuration) {
+            setIsPlaying(false);
+            return 0;
+          }
+          return newTime;
+        });
+        animationRef.current = requestAnimationFrame(animate);
+      };
+      animationRef.current = requestAnimationFrame(animate);
+    } else {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    }
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [isPlaying, totalDuration]);
+
+  // Add firework to timeline
+  const addFirework = (type, timePosition) => {
+    const newFirework = {
+      id: `fw-${Date.now()}`,
+      type: type.id,
+      name: type.name,
+      startTime: timePosition,
+      duration: type.duration,
+      color: type.color,
+      position: { x: 400, y: 300 }, // Default center position
+    };
+    setFireworks((prev) => [...prev, newFirework]);
+  };
+
+  // Handle timeline click to add firework
+  const handleTimelineClick = (e) => {
+    if (!draggedItem) return;
+
+    const timelineRect = timelineRef.current.getBoundingClientRect();
+    const clickX = e.clientX - timelineRect.left;
+    const timelineWidth = timelineRect.width - 40; // Account for padding
+    const timePosition = (clickX / timelineWidth) * totalDuration;
+
+    addFirework(draggedItem, Math.max(0, timePosition));
+    setDraggedItem(null);
+  };
+
+  // Remove firework
+  const removeFirework = (id) => {
+    setFireworks((prev) => prev.filter((fw) => fw.id !== id));
+  };
+
+  // Playback controls
+  const togglePlayback = () => setIsPlaying(!isPlaying);
+  const stopPlayback = () => {
+    setIsPlaying(false);
+    setCurrentTime(0);
+  };
+
+  // Convert time to pixels for positioning
+  const timeToPixels = (time) => {
+    const timelineWidth = 800; // Fixed width for now
+    return (time / totalDuration) * timelineWidth;
+  };
+
+  return (
+    <div className="w-full h-screen bg-gray-900 text-white p-4">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">Fireworks Display Designer</h1>
+        <p className="text-gray-400">
+          Design your fireworks show by dragging effects onto the timeline
+        </p>
+      </div>
+
+      {/* Firework Library */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-3">Firework Library</h2>
+        <div className="flex gap-3">
+          {fireworkTypes.map((type) => (
+            <button
+              key={type.id}
+              className={`px-4 py-2 rounded-lg border-2 transition-all ${
+                draggedItem?.id === type.id
+                  ? "border-blue-400 bg-blue-400/20"
+                  : "border-gray-600 hover:border-gray-400"
+              }`}
+              style={{
+                backgroundColor:
+                  draggedItem?.id === type.id ? type.color + "20" : undefined,
+              }}
+              onClick={() =>
+                setDraggedItem(draggedItem?.id === type.id ? null : type)
+              }
+            >
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-4 h-4 rounded-full"
+                  style={{ backgroundColor: type.color }}
+                />
+                {type.name}
+              </div>
+            </button>
+          ))}
+        </div>
+        {draggedItem && (
+          <p className="text-blue-400 mt-2">
+            Click on the timeline to place {draggedItem.name}
+          </p>
+        )}
+      </div>
+
+      {/* Playback Controls */}
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={togglePlayback}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+          >
+            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+            {isPlaying ? "Pause" : "Play"}
+          </button>
+          <button
+            onClick={stopPlayback}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <Square size={20} />
+            Stop
+          </button>
+          <div className="text-gray-400">
+            Time: {currentTime.toFixed(1)}s / {totalDuration}s
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="bg-gray-800 rounded-lg p-4">
+        <h2 className="text-xl font-semibold mb-4">Timeline</h2>
+
+        {/* Time markers */}
+        <div className="relative mb-2">
+          <div className="flex justify-between text-sm text-gray-400">
+            {Array.from({ length: totalDuration + 1 }, (_, i) => (
+              <span key={i}>{i}s</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Main timeline area */}
+        <div
+          ref={timelineRef}
+          className="relative h-32 bg-gray-700 rounded cursor-pointer border-2 border-gray-600"
+          onClick={handleTimelineClick}
+        >
+          {/* Current time indicator */}
+          <div
+            className="absolute top-0 w-0.5 h-full bg-red-500 z-20"
+            style={{ left: `${timeToPixels(currentTime)}px` }}
+          />
+
+          {/* Fireworks on timeline */}
+          {fireworks.map((firework) => (
+            <div
+              key={firework.id}
+              className="absolute top-2 h-28 bg-opacity-70 rounded border-2 border-white/30 cursor-pointer group"
+              style={{
+                left: `${timeToPixels(firework.startTime)}px`,
+                width: `${timeToPixels(firework.duration)}px`,
+                backgroundColor: firework.color + "40",
+                borderColor: firework.color,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                removeFirework(firework.id);
+              }}
+            >
+              <div className="p-1 text-xs">
+                <div className="font-semibold">{firework.name}</div>
+                <div className="text-gray-300">
+                  {firework.startTime.toFixed(1)}s
+                </div>
+              </div>
+              <div className="absolute inset-0 bg-red-500/50 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
+                <span className="text-white font-bold">Remove</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Timeline help text */}
+        <div className="mt-2 text-sm text-gray-400">
+          Select a firework type above, then click on the timeline to place it.
+          Click fireworks to remove them.
+        </div>
+      </div>
+
+      {/* Current Show Summary */}
+      <div className="mt-6">
+        <h3 className="text-lg font-semibold mb-2">Show Summary</h3>
+        <div className="bg-gray-800 rounded-lg p-4">
+          {fireworks.length === 0 ? (
+            <p className="text-gray-400">
+              No fireworks added yet. Start by selecting a type and clicking on
+              the timeline!
+            </p>
+          ) : (
+            <div>
+              <p className="mb-2">Total fireworks: {fireworks.length}</p>
+              <div className="space-y-1">
+                {fireworks.map((fw) => (
+                  <div key={fw.id} className="flex items-center gap-2 text-sm">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: fw.color }}
+                    />
+                    <span>
+                      {fw.name} at {fw.startTime.toFixed(1)}s
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default FireworksTimeline;
