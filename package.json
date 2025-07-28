@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist --dotfiles"
+    "deploy": "gh-pages -d dist --dotfiles --nojekyll"
   },
   "dependencies": {
     "@react-three/drei": "^10.6.0",
