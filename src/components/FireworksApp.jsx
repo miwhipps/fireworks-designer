@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Play, Pause, Square } from "lucide-react";
 import FireworksCanvas from "./Canvas/FireworksCanvas";
 import { trailConfigs } from "./Canvas/TrajectoryCalculator";
-import { professionalShells, professionalTrails, authenticColors } from "./Canvas/utils/professionalFireworks";
+import { professionalShells } from "./Canvas/utils/professionalFireworks";
 
 const FireworksApp = () => {
   const [fireworks, setFireworks] = useState([]);
