@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Play, Pause, Square } from "lucide-react";
 import FireworksCanvas from "./Canvas/FireworksCanvas";
+import { trailConfigs } from "./Canvas/TrajectoryCalculator";
+import { professionalShells, professionalTrails, authenticColors } from "./Canvas/utils/professionalFireworks";
 
 const FireworksApp = () => {
   const [fireworks, setFireworks] = useState([]);
@@ -13,15 +15,36 @@ const FireworksApp = () => {
   const [draggedFireworkId, setDraggedFireworkId] = useState(null);
   const [dragOffset, setDragOffset] = useState(0);
   const [isCmdPressed, setIsCmdPressed] = useState(false);
+  const [backgroundImage, setBackgroundImage] = useState(null);
 
   const animationRef = useRef();
   const timelineRef = useRef();
 
   const fireworkTypes = [
-    { id: "burst", name: "Burst", color: "#ff4444", duration: 2 }, // Instant explosion, particles live 2s
-    { id: "fountain", name: "Fountain", color: "#44ff44", duration: 2 }, // 2s emission, particles live 3s each
-    { id: "spiral", name: "Spiral", color: "#4444ff", duration: 5.5 }, // 1.5s spiral emission, particles live 3s
-    { id: "willow", name: "Willow", color: "#ffff44", duration: 2 }, // Instant willow, particles live 3.5s
+    // Original artistic fireworks
+    { id: "burst", name: "Burst", color: "#ff4444", duration: 2 },
+    { id: "fountain", name: "Fountain", color: "#44ff44", duration: 2 },
+    { id: "spiral", name: "Spiral", color: "#4444ff", duration: 5.5 },
+    { id: "willow", name: "Willow", color: "#ffff44", duration: 2 },
+    { id: "chrysanthemum", name: "Chrysanthemum", colors: ['#ff6b35', '#f7931e', '#ffd23f', '#06ffa5', '#3b82f6'], color: '#ffd23f', duration: 3.5 },
+    { id: "ring", name: "Ring", colors: ['#8a2be2', '#4b0082', '#0000ff', '#00bfff'], color: '#8a2be2', duration: 3 },
+    { id: "strobe", name: "Strobe", colors: ['#ffffff', '#00ffff', '#ff00ff'], color: '#ffffff', duration: 2.5 },
+    { id: "crossette", name: "Crossette", colors: ['#e91e63', '#9c27b0', '#673ab7'], color: '#e91e63', duration: 4 },
+    { id: "palmtree", name: "Palm Tree", colors: ['#ffd700', '#ffaa00', '#ff8800', '#ff6600'], color: '#ffd700', duration: 5 },
+    
+    // Professional shells with authentic colors
+    ...Object.values(professionalShells).map(shell => ({
+      id: shell.id,
+      name: shell.name,
+      color: shell.colors[0], // Primary color for timeline
+      colors: shell.colors,
+      duration: shell.duration,
+      starCount: shell.starCount,
+      shellSize: shell.shellSize,
+      type: shell.type,
+      safetyDistance: shell.safetyDistance,
+      isProfessional: true
+    }))
   ];
 
   useEffect(() => {
@@ -60,6 +83,10 @@ const FireworksApp = () => {
         startTime: timePosition,
         duration: type.duration,
         color: type.color,
+        colors: type.colors, // Preserve multi-color array
+        shellSize: type.shellSize, // Professional shell size
+        isProfessional: type.isProfessional,
+        safetyDistance: type.safetyDistance,
         position: { x: 400, y: 300 },
         position3D: position3D,
       };
@@ -243,6 +270,28 @@ const FireworksApp = () => {
     };
   }, []);
 
+  const handleBackgroundImageUpload = useCallback((event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      console.log('Uploading image:', file.name, file.type, file.size);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        console.log('Image data URL created, length:', e.target.result.length);
+        setBackgroundImage(e.target.result);
+      };
+      reader.onerror = (e) => {
+        console.error('Error reading file:', e);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      console.warn('Invalid file type or no file selected');
+    }
+  }, []);
+
+  const clearBackgroundImage = useCallback(() => {
+    setBackgroundImage(null);
+  }, []);
+
   return (
     <div className="w-full h-screen bg-gray-900 text-white flex flex-col">
       {/* Header */}
@@ -264,11 +313,40 @@ const FireworksApp = () => {
           onSelectFirework={setSelectedFireworkId}
           draggedItem={draggedItem}
           onAddFirework={handleCanvasAddFirework}
+          backgroundImage={backgroundImage}
+          isPlaying={isPlaying}
         />
       </div>
 
       {/* Timeline Section */}
       <div className="h-80 bg-gray-800 border-t border-gray-700 p-4 overflow-y-auto">
+        {/* Background Image Controls */}
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold mb-2">Background Image</h3>
+          <div className="flex gap-2 flex-wrap items-center">
+            <label className="px-3 py-2 rounded border-2 border-gray-600 hover:border-gray-400 cursor-pointer transition-all text-sm bg-purple-600 hover:bg-purple-700">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleBackgroundImageUpload}
+                className="hidden"
+              />
+              📁 Upload Image
+            </label>
+            {backgroundImage && (
+              <button
+                onClick={clearBackgroundImage}
+                className="px-3 py-2 rounded border-2 border-red-600 hover:border-red-400 text-sm bg-red-600 hover:bg-red-700 transition-all"
+              >
+                🗑️ Clear
+              </button>
+            )}
+            {backgroundImage && (
+              <span className="text-green-400 text-sm">✓ Image loaded</span>
+            )}
+          </div>
+        </div>
+
         {/* Firework Library */}
         <div className="mb-4">
           <h3 className="text-lg font-semibold mb-2">Firework Library</h3>
@@ -290,11 +368,32 @@ const FireworksApp = () => {
                 }
               >
                 <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: type.color }}
-                  />
-                  {type.name}
+                  {type.colors ? (
+                    // Multi-color gradient indicator
+                    <div className="w-3 h-3 rounded-full flex overflow-hidden">
+                      {type.colors.map((color, index) => (
+                        <div
+                          key={index}
+                          className="flex-1 h-full"
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    // Single color indicator
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: type.color }}
+                    />
+                  )}
+                  <div className="flex flex-col">
+                    <span>{type.name}</span>
+                    {type.isProfessional && (
+                      <span className="text-xs text-yellow-400">
+                        Professional {type.shellSize}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
             ))}
@@ -361,36 +460,52 @@ const FireworksApp = () => {
             />
 
             {/* Fireworks on timeline */}
-            {fireworks.map((firework) => (
-              <div
-                key={firework.id}
-                className={`absolute top-1 h-22 bg-opacity-70 rounded border-2 group ${
-                  draggedFireworkId === firework.id
-                    ? "cursor-grabbing ring-2 ring-yellow-400 z-10"
-                    : selectedFireworkId === firework.id
-                    ? `${isCmdPressed ? "cursor-grab" : "cursor-pointer"} ring-2 ring-white`
-                    : `${isCmdPressed ? "cursor-grab" : "cursor-pointer"} border-white/30 hover:border-white/60`
-                } ${isCmdPressed ? "hover:ring-2 hover:ring-blue-400" : ""}`}
-                style={{
-                  left: `${timeToPixels(firework.startTime)}px`,
-                  width: `${timeToPixels(firework.duration)}px`,
-                  backgroundColor: firework.color + "40",
-                  borderColor: firework.color,
-                  opacity: draggedFireworkId === firework.id ? 0.8 : 1,
-                }}
-                onMouseDown={(e) => handleFireworkMouseDown(e, firework.id)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Only handle regular click if Cmd is not pressed
-                  if (!isCmdPressed && !draggedFireworkId) {
-                    if (selectedFireworkId === firework.id) {
-                      removeFirework(firework.id);
-                    } else {
-                      setSelectedFireworkId(firework.id);
-                    }
-                  }
-                }}
-              >
+            {fireworks.map((firework) => {
+              const trailConfig = trailConfigs[firework.type] || trailConfigs.burst;
+              const launchStartTime = firework.startTime - trailConfig.launchTime;
+              
+              return (
+                <div key={firework.id} className="absolute top-1 h-22">
+                  {/* Launch trail indicator */}
+                  <div
+                    className="absolute h-full bg-opacity-30 rounded-l border-l-2 border-dashed"
+                    style={{
+                      left: `${timeToPixels(launchStartTime)}px`,
+                      width: `${timeToPixels(trailConfig.launchTime)}px`,
+                      backgroundColor: trailConfig.color + "20",
+                      borderColor: trailConfig.color,
+                    }}
+                  />
+                  
+                  {/* Main firework explosion */}
+                  <div
+                    className={`absolute h-full bg-opacity-70 rounded border-2 group ${
+                      draggedFireworkId === firework.id
+                        ? "cursor-grabbing ring-2 ring-yellow-400 z-10"
+                        : selectedFireworkId === firework.id
+                        ? `${isCmdPressed ? "cursor-grab" : "cursor-pointer"} ring-2 ring-white`
+                        : `${isCmdPressed ? "cursor-grab" : "cursor-pointer"} border-white/30 hover:border-white/60`
+                    } ${isCmdPressed ? "hover:ring-2 hover:ring-blue-400" : ""}`}
+                    style={{
+                      left: `${timeToPixels(firework.startTime)}px`,
+                      width: `${timeToPixels(firework.duration)}px`,
+                      backgroundColor: firework.color + "40",
+                      borderColor: firework.color,
+                      opacity: draggedFireworkId === firework.id ? 0.8 : 1,
+                    }}
+                    onMouseDown={(e) => handleFireworkMouseDown(e, firework.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Only handle regular click if Cmd is not pressed
+                      if (!isCmdPressed && !draggedFireworkId) {
+                        if (selectedFireworkId === firework.id) {
+                          removeFirework(firework.id);
+                        } else {
+                          setSelectedFireworkId(firework.id);
+                        }
+                      }
+                    }}
+                  >
                 <div className="p-1 text-xs">
                   <div className="font-semibold">{firework.name}</div>
                   <div className="text-gray-200">
@@ -403,7 +518,9 @@ const FireworksApp = () => {
                   </span>
                 </div>
               </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
 
           {/* Timeline help text */}
@@ -426,6 +543,11 @@ const FireworksApp = () => {
               <div>
                 <p className="mb-2 text-sm">
                   Total fireworks: {fireworks.length}
+                  {fireworks.some(fw => fw.isProfessional) && (
+                    <span className="ml-2 text-yellow-400 text-xs">
+                      (Professional shells included)
+                    </span>
+                  )}
                 </p>
                 <div className="space-y-1 max-h-20 overflow-y-auto">
                   {fireworks.map((fw) => (

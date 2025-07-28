@@ -4,7 +4,9 @@ import { OrbitControls } from '@react-three/drei';
 import ParticleSystem from './ParticleSystem';
 import SceneBackground from './SceneBackground';
 import FireworkPositioner from './FireworkPositioner';
+import LaunchTrail from './LaunchTrail';
 import { clampPosition } from './utils/coordinateUtils';
+import { trailConfigs, getGroundLaunchPosition } from './TrajectoryCalculator';
 
 // Helper function to get particle lifetime for each effect type
 const getParticleLifetime = (type) => {
@@ -29,7 +31,9 @@ const CanvasContent = ({
   onSelectFirework,
   draggedItem,
   onAddFirework,
-  onFireworkPosition 
+  onFireworkPosition,
+  backgroundImage,
+  isPlaying
 }) => {
   const [isCmdPressed, setIsCmdPressed] = useState(false);
 
@@ -75,6 +79,7 @@ const CanvasContent = ({
       <SceneBackground 
         backgroundColor="#001122"
         showGrid={true}
+        backgroundImage={backgroundImage}
       />
 
       {/* Invisible plane to capture clicks */}
@@ -103,7 +108,7 @@ const CanvasContent = ({
       )}
 
       <group>
-        {/* Render particle systems for active fireworks */}
+        {/* Render fireworks with launch trails and particle systems */}
         {fireworks.map((fw) => {
           // Allow extra time for particles to complete their lifecycle
           const particleLifetime = getParticleLifetime(fw.type);
@@ -111,13 +116,32 @@ const CanvasContent = ({
           const isActive = currentTime >= fw.startTime && 
                           currentTime <= effectEndTime;
           
+          // Calculate trail timing
+          const trailConfig = trailConfigs[fw.type] || trailConfigs.burst;
+          const trailStartTime = fw.startTime - trailConfig.launchTime;
+          const isTrailActive = currentTime >= trailStartTime && currentTime <= fw.startTime;
           
+          // Get ground launch position for trail
+          const groundPosition = getGroundLaunchPosition(fw.position3D || [0, 0, 0], fw.id);
           
           return (
             <group key={fw.id}>
+              {/* Launch Trail - appears before explosion */}
+              <LaunchTrail
+                startPosition={groundPosition}
+                endPosition={fw.position3D || [0, 0, 0]}
+                fireworkType={fw.type}
+                launchStartTime={trailStartTime}
+                currentTime={currentTime}
+                isActive={isTrailActive}
+              />
+              
+              {/* Particle System - explosion effect */}
               <ParticleSystem
                 type={fw.type}
                 color={fw.color}
+                colors={fw.colors}
+                shellSize={fw.shellSize}
                 position={fw.position3D || [0, 0, 0]}
                 startTime={fw.startTime}
                 currentTime={currentTime}
@@ -125,20 +149,23 @@ const CanvasContent = ({
                 isActive={isActive}
               />
               
-              <group 
-                onClick={(e) => handleFireworkClick(e, fw.id)}
-                onPointerOver={(e) => e.stopPropagation()}
-              >
-                <FireworkPositioner
-                  position={fw.position3D || [0, 0, 0]}
-                  color={fw.color}
-                  isSelected={selectedFireworkId === fw.id}
-                  isActive={isActive}
-                  fireworkType={fw.type}
-                  fireworkId={fw.id}
-                  onPositionChange={onFireworkPosition}
-                />
-              </group>
+              {/* Firework Positioner - for editing (hidden during playback) */}
+              {!isPlaying && (
+                <group 
+                  onClick={(e) => handleFireworkClick(e, fw.id)}
+                  onPointerOver={(e) => e.stopPropagation()}
+                >
+                  <FireworkPositioner
+                    position={fw.position3D || [0, 0, 0]}
+                    color={fw.color}
+                    isSelected={selectedFireworkId === fw.id}
+                    isActive={isActive}
+                    fireworkType={fw.type}
+                    fireworkId={fw.id}
+                    onPositionChange={onFireworkPosition}
+                  />
+                </group>
+              )}
             </group>
           );
         })}
@@ -154,7 +181,9 @@ const FireworksCanvas = ({
   onSelectFirework,
   draggedItem,
   onAddFirework,
-  onFireworkPosition
+  onFireworkPosition,
+  backgroundImage,
+  isPlaying = false
 }) => {
   const canvasRef = useRef();
   const [showControlsModal, setShowControlsModal] = useState(false);
@@ -177,6 +206,8 @@ const FireworksCanvas = ({
           draggedItem={draggedItem}
           onAddFirework={onAddFirework}
           onFireworkPosition={onFireworkPosition}
+          backgroundImage={backgroundImage}
+          isPlaying={isPlaying}
         />
       </Canvas>
       
@@ -204,66 +235,56 @@ const FireworksCanvas = ({
         </svg>
       </button>
 
-      {/* Controls Modal */}
+      {/* Controls Popup */}
       {showControlsModal && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => setShowControlsModal(false)}
-        >
-          <div 
-            className="bg-gray-800 text-white p-6 rounded-lg max-w-md mx-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-blue-300">Controls Guide</h3>
-              <button
-                onClick={() => setShowControlsModal(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <div className="space-y-4 text-sm">
-              <div>
-                <div className="text-yellow-300 font-medium mb-2 flex items-center">
-                  <span className="mr-2">📹</span> Camera Controls
-                </div>
-                <div className="space-y-1 ml-6 text-gray-300">
-                  <div>🖱️ <strong>Left drag:</strong> Rotate view</div>
-                  <div>⌥ <strong>Alt + drag:</strong> Pan camera</div>
-                  <div>🔍 <strong>Scroll:</strong> Zoom in/out</div>
-                </div>
+        <div className="absolute bottom-16 right-4 bg-gray-800 text-white p-4 rounded-lg shadow-2xl border border-gray-600 w-80 z-50">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-semibold text-blue-300">Controls Guide</h3>
+            <button
+              onClick={() => setShowControlsModal(false)}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <div className="space-y-3 text-xs">
+            <div>
+              <div className="text-yellow-300 font-medium mb-1">
+                Camera
               </div>
-
-              <div>
-                <div className="text-green-300 font-medium mb-2 flex items-center">
-                  <span className="mr-2">🎆</span> Fireworks (3D View)
-                </div>
-                <div className="space-y-1 ml-6 text-gray-300">
-                  <div>🖱️ <strong>Click:</strong> Select/place firework</div>
-                  <div>⌘ <strong>Cmd + drag:</strong> Move position</div>
-                  <div>🗑️ <strong>Double click:</strong> Remove (if selected)</div>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-purple-300 font-medium mb-2 flex items-center">
-                  <span className="mr-2">⏱️</span> Timeline Controls
-                </div>
-                <div className="space-y-1 ml-6 text-gray-300">
-                  <div>🖱️ <strong>Click:</strong> Scrub time/place firework</div>
-                  <div>⌘ <strong>Cmd + drag:</strong> Move firework in time</div>
-                  <div>🔴 <strong>Drag red handle:</strong> Scrub timeline</div>
-                </div>
+              <div className="space-y-0.5 ml-2 text-gray-300">
+                <div><strong>Left drag:</strong> Rotate</div>
+                <div><strong>Alt + drag:</strong> Pan</div>
+                <div><strong>Scroll:</strong> Zoom</div>
               </div>
             </div>
 
-            <div className="mt-6 text-xs text-gray-400 text-center">
-              💡 Tip: Use Cmd consistently for firework positioning in both 3D and timeline views
+            <div>
+              <div className="text-green-300 font-medium mb-1">
+                Fireworks
+              </div>
+              <div className="space-y-0.5 ml-2 text-gray-300">
+                <div><strong>Click:</strong> Select/place</div>
+                <div><strong>Cmd + drag:</strong> Move</div>
+              </div>
             </div>
+
+            <div>
+              <div className="text-purple-300 font-medium mb-1">
+                Timeline
+              </div>
+              <div className="space-y-0.5 ml-2 text-gray-300">
+                <div><strong>Click:</strong> Scrub/place</div>
+                <div><strong>Cmd + drag:</strong> Move time</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-gray-400">
+            Tip: Use Cmd for positioning in both views
           </div>
         </div>
       )}
