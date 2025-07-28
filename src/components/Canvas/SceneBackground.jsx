@@ -30,8 +30,8 @@ const SceneBackground = ({
       console.log('Image loaded, dimensions:', img.width, 'x', img.height);
       
       const tex = new THREE.Texture(img);
-      tex.wrapS = THREE.ClampToEdgeWrap;
-      tex.wrapT = THREE.ClampToEdgeWrap;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
       tex.flipY = true;
